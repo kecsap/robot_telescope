@@ -138,11 +138,16 @@ int main(int argc, char * argv[])
       ShutterTime = (NightMode == -1 ? 10000 : 4500000);
       Iso = 200;
       NightMode = 0;
+    } else
+    if (NightMode == 0 && Iso == 200 && CurrentTime > QTime(Sunset.hour()-1, Sunset.minute()) && CurrentTime < Sunset)
+    {
+      MC_LOG("Change to daylight mode (high ISO mode)");
+      Iso = 800;
     }
     // Capture an image
     QString CommandStr;
 
-    CommandStr = QString("raspistill -ISO %1 -n -w 640 -h 384 -ss %2 -vf -o /tmp/capture.png").arg((int)Iso).arg((int)ShutterTime);
+    CommandStr = QString("raspistill -ISO %1 -n -w 640 -h 384 -ss %2 -vf -hf -o /tmp/capture.png").arg((int)Iso).arg((int)ShutterTime);
     QProcess::execute(CommandStr);
     if (!MCFileExists("/tmp/capture.png"))
     {
@@ -182,19 +187,19 @@ int main(int argc, char * argv[])
       if (Brightness > 130)
       {
         ShutterTime = (int)((float)ShutterTime / 1.3);
-        MC_LOG("Average brightness: %d - Decrease shutter speed to %d", Brightness, (int)ShutterTime);
+        MC_LOG("Average brightness: %d - Decrease shutter time to %d", Brightness, (int)ShutterTime);
       } else
       if (Brightness < 80)
       {
-        ShutterTime = (int)((float)ShutterTime*1.3);
-        MC_LOG("Average brightness: %d - Increase shutter speed to %d", Brightness, (int)ShutterTime);
+        ShutterTime = (int)((float)ShutterTime*1.2);
+        MC_LOG("Average brightness: %d - Increase shutter time to %d", Brightness, (int)ShutterTime);
       }
       CapturedImage.SaveToFile("/tmp/capture.jpg");
     }
     // Upload the image to Wunderground
     QString UploadCommandStr;
 
-    UploadCommandStr = QString("curl -T /tmp/capture.jpg ftp://webcam.wunderground.com --user %1:%2").arg(argv[1]).arg(argv[2]);
+    UploadCommandStr = QString("curl -s -S -T /tmp/capture.jpg ftp://webcam.wunderground.com --user %1:%2").arg(argv[1]).arg(argv[2]);
     QProcess::execute(UploadCommandStr);
     MC_LOG("Image uploaded");
     // Wait some time
