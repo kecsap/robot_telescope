@@ -168,18 +168,7 @@ int main(int argc, char * argv[])
     BlueLayer.reset(TempImage.GetLayer(2));
     TempImage = *BlueLayer;
     TempImage.ConvertToRGB();
-    if (NightMode == 1)
-    {
-      if ((float)TempImage.GetWhitePixelCount() / CapturedImage.GetHeight() / CapturedImage.GetWidth() / 3 > 5)
-        Text = QString("Clouds or Moon");
-      else
-        Text = QString("Clear Sky");
-
-      CapturedImage.GammaCorrection(0.5);
-      CapturedImage.DrawText(CapturedImage.GetWidth()-220, CapturedImage.GetHeight()-25, Text.toStdString(),
-                             0.8, MEColor(255, 255, 255));
-      CapturedImage.SaveToFile("/tmp/capture.jpg");
-    }
+    // Shutter time control
     if (NightMode == 0)
     {
       int Brightness = (int)CapturedImage.AverageBrightnessLevel();
@@ -194,8 +183,35 @@ int main(int argc, char * argv[])
         ShutterTime = (int)((float)ShutterTime*1.2);
         MC_LOG("Average brightness: %d - Increase shutter time to %d", Brightness, (int)ShutterTime);
       }
-      CapturedImage.SaveToFile("/tmp/capture.jpg");
+    } else {
+      int Brightness = (int)CapturedImage.AverageBrightnessLevel();
+
+//      MC_LOG("Average brightness: %d", Brightness);
+      if (Brightness > 200)
+      {
+        ShutterTime = (int)((float)ShutterTime / 1.3);
+        MC_LOG("Average brightness: %d - Decrease shutter time to %d", Brightness, (int)ShutterTime);
+      } else
+      if (Brightness <= 10)
+      {
+        ShutterTime = 4500000;
+        MC_LOG("Average brightness: %d - Reset shutter time to %d", Brightness, (int)ShutterTime);
+      }
     }
+    // Clear sky detection
+    if (NightMode == 1)
+    {
+      if ((float)TempImage.GetWhitePixelCount() / CapturedImage.GetHeight() / CapturedImage.GetWidth() / 3 > 5)
+        Text = QString("Clouds or Moon");
+      else
+        Text = QString("Clear Sky");
+
+      CapturedImage.GammaCorrection(0.5);
+      CapturedImage.DrawText(CapturedImage.GetWidth()-220, CapturedImage.GetHeight()-25, Text.toStdString(),
+                             0.8, MEColor(255, 255, 255));
+    }
+    // Save the final image
+    CapturedImage.SaveToFile("/tmp/capture.jpg");
     // Upload the image to Wunderground
     QString UploadCommandStr;
 

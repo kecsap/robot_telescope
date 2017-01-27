@@ -5,6 +5,8 @@ INCLUDEPATH += . ../libs/libsunrise/src
 
 CONFIG += c++11 no_keywords
 
+QMAKE_CXXFLAGS += -Wno-missing-field-initializers
+
 HEADERS += libs/libsunrise/src/colours.h libs/libsunrise/src/sunrise.h
 LIBS += -L../libs/libsunrise/src -lsunrise
 
