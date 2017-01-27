@@ -95,7 +95,8 @@ int main(int argc, char * argv[])
   tm SunriseTime;
   tm SunsetTime;
   int NightMode = -1;
-  MANum<int> ShutterTime(100, 100, 4500000);
+  MANum<int> ShutterTime(200, 200, 4500000);
+  MANum<int> Iso(800, 200, 800);
   MEImage MaskImage;
 
   GetLocation(Longitude, Latitude);
@@ -126,20 +127,22 @@ int main(int argc, char * argv[])
     Sunset = QTime(SunsetTime.tm_hour+GmtCorrection, SunsetTime.tm_min);
     if ((NightMode == -1 || NightMode == 0) && (CurrentTime > Sunset || CurrentTime < Sunrise))
     {
-      NightMode = 1;
       MC_LOG("Change to night mode");
       ShutterTime = 4500000;
+      Iso = 800;
+      NightMode = 1;
     } else
     if ((NightMode == -1 || NightMode == 1) && CurrentTime > Sunrise && CurrentTime < Sunset)
     {
-      NightMode = 0;
       MC_LOG("Change to daylight mode");
-      ShutterTime = 4500000;
+      ShutterTime = (NightMode == -1 ? 10000 : 4500000);
+      Iso = 200;
+      NightMode = 0;
     }
     // Capture an image
     QString CommandStr;
 
-    CommandStr = QString("raspistill -ISO 800 -n -w 640 -h 384 -ss %1 -vf -o /tmp/capture.png").arg((int)ShutterTime);
+    CommandStr = QString("raspistill -ISO %1 -n -w 640 -h 384 -ss %2 -vf -o /tmp/capture.png").arg((int)Iso).arg((int)ShutterTime);
     QProcess::execute(CommandStr);
     if (!MCFileExists("/tmp/capture.png"))
     {
@@ -176,14 +179,17 @@ int main(int argc, char * argv[])
     {
       int Brightness = (int)CapturedImage.AverageBrightnessLevel();
 
-      if (Brightness > 180)
+      if (Brightness > 130)
       {
-        MC_LOG("Average brightness: %d - Decrease shutter speed", Brightness);
-        ShutterTime = (int)((float)ShutterTime / 1.2);
-      } else {
-        MC_LOG("Average brightness: %d - Increase shutter speed", Brightness);
-        ShutterTime = (int)((float)ShutterTime*1.2);
+        ShutterTime = (int)((float)ShutterTime / 1.3);
+        MC_LOG("Average brightness: %d - Decrease shutter speed to %d", Brightness, (int)ShutterTime);
+      } else
+      if (Brightness < 80)
+      {
+        ShutterTime = (int)((float)ShutterTime*1.3);
+        MC_LOG("Average brightness: %d - Increase shutter speed to %d", Brightness, (int)ShutterTime);
       }
+      CapturedImage.SaveToFile("/tmp/capture.jpg");
     }
     // Upload the image to Wunderground
     QString UploadCommandStr;
@@ -192,7 +198,7 @@ int main(int argc, char * argv[])
     QProcess::execute(UploadCommandStr);
     MC_LOG("Image uploaded");
     // Wait some time
-    sleep(20);
+    sleep(40);
   }
   return 0;
 }
