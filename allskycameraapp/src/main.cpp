@@ -95,7 +95,7 @@ int main(int argc, char * argv[])
   tm SunriseTime;
   tm SunsetTime;
   int NightMode = -1;
-  MANum<int> ShutterTime(200, 200, 4500000);
+  MANum<int> ShutterTime(50, 50, 4500000);
   MANum<int> Iso(800, 200, 800);
   MEImage MaskImage;
 
@@ -173,7 +173,7 @@ int main(int argc, char * argv[])
     {
       int Brightness = (int)CapturedImage.AverageBrightnessLevel();
 
-      if (Brightness > 130)
+      if (Brightness > 150)
       {
         ShutterTime = (int)((float)ShutterTime / 1.3);
         MC_LOG("Average brightness: %d - Decrease shutter time to %d", Brightness, (int)ShutterTime);
