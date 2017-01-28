@@ -10,8 +10,8 @@ new environment.
 * Automatic GPS coordinate determination with geoclue based on the IP address.
 * Automatic sunset/sunrise calculation based on GPS coordinates.
 * Automatic shutter time based on the average image brightness.
-* Using mask image to filter out the environment silhouette.
-* Detecting clear sky based on the brighter areas of the sky.
+* Using mask image to filter out the environment silhouette for clear sky detection.
+* Detecting clear sky based on the dark/light areas of the sky.
 * Upload the captured image to Wunderground service.
 
 ## How to compile on Raspbian
