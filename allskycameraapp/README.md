@@ -46,8 +46,7 @@ new environment.
    - cd src
    - ./allskycameraapp Wunderground_camera_ID Wunderground_password
 
-6. Optional: Create an RGB image (mask.png) which contains white (255, 255, 255) areas over the environment silhouette.
-Place this file in allskycameraapp/src before running the application.
+Optional 1: Create an RGB image (mask.png) which contains white (255, 255, 255) areas over the environment silhouette.
+Place this file in allskycameraapp/src before running the application. This image is used for the clear sky detection.
 
-
-
+Optional 2: Create an RGB image (info_layer.jpg) to composite any informative graphics or text to the image in night mode.
