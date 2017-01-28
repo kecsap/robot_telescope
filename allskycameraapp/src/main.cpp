@@ -109,11 +109,13 @@ int main(int argc, char * argv[])
   if (!MCFileExists("mask.png"))
   {
     MC_WARNING("Mask image (mask.png) does not exist!");
-    return 1;
+    MaskImage.Realloc(640, 384, 3);
+    MaskImage.DrawRectangle(0, 0, 639, 383, MEColor(255, 255, 255), true);
+  } else {
+    MaskImage.LoadFromFile("mask.png");
+    MaskImage.Invert();
+    MaskImage.ConvertToRGB();
   }
-  MaskImage.LoadFromFile("mask.png");
-  MaskImage.Invert();
-  MaskImage.ConvertToRGB();
 
   while (true)
   {
