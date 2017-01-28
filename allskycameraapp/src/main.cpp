@@ -98,6 +98,8 @@ int main(int argc, char * argv[])
   MANum<int> ShutterTime(50, 50, 4500000);
   MANum<int> Iso(800, 200, 800);
   MEImage MaskImage;
+  MEImage InfoLayerImage;
+  bool InfoLayer = false;
 
   GetLocation(Longitude, Latitude);
   MC_LOG("Current location - longitude: %1.4f latitude: %1.4f", Longitude, Latitude);
@@ -112,9 +114,16 @@ int main(int argc, char * argv[])
     MaskImage.Realloc(640, 384, 3);
     MaskImage.DrawRectangle(0, 0, 639, 383, MEColor(255, 255, 255), true);
   } else {
+    MC_LOG("Loading mask image...");
     MaskImage.LoadFromFile("mask.png");
     MaskImage.Invert();
     MaskImage.ConvertToRGB();
+  }
+  if (MCFileExists("info_layer.jpg"))
+  {
+    MC_LOG("Loading info layer image...");
+    InfoLayerImage.LoadFromFile("info_layer.jpg");
+    InfoLayer = true;
   }
 
   while (true)
@@ -200,15 +209,18 @@ int main(int argc, char * argv[])
         MC_LOG("Average brightness: %d - Reset shutter time to %d", Brightness, (int)ShutterTime);
       }
     }
-    // Clear sky detection
+    // Clear sky detection and info layer composition in night mode
     if (NightMode == 1)
     {
-      if ((float)TempImage.GetWhitePixelCount() / CapturedImage.GetHeight() / CapturedImage.GetWidth() / 3 > 5)
-        Text = QString("Clouds or Moon");
-      else
-        Text = QString("Clear Sky");
-
       CapturedImage.GammaCorrection(0.5);
+      if ((float)TempImage.GetWhitePixelCount() / CapturedImage.GetHeight() / CapturedImage.GetWidth() / 3 > 5)
+      {
+        Text = QString("Clouds or Moon");
+      } else {
+        Text = QString("Clear Sky");
+        if (InfoLayer)
+          CapturedImage.Addition(InfoLayerImage, ME::NonNegativeSumAddition);
+      }
       CapturedImage.DrawText(CapturedImage.GetWidth()-220, CapturedImage.GetHeight()-25, Text.toStdString(),
                              0.8, MEColor(255, 255, 255));
     }
