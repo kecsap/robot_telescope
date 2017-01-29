@@ -158,7 +158,8 @@ int main(int argc, char * argv[])
     // Capture an image
     QString CommandStr;
 
-    CommandStr = QString("raspistill -ISO %1 -n -w 640 -h 384 -ss %2 -vf -hf -o /tmp/capture.png").arg((int)Iso).arg((int)ShutterTime);
+    CommandStr = QString("raspistill -ISO %1 -sa %2 -n -w 640 -h 384 -ss %3 -vf -hf -o /tmp/capture.png").arg((int)Iso).
+                 arg(NightMode == 0 ? 50 : 0).arg((int)ShutterTime);
     QProcess::execute(CommandStr);
     if (!MCFileExists("/tmp/capture.png"))
     {
@@ -184,7 +185,7 @@ int main(int argc, char * argv[])
     {
       int Brightness = (int)CapturedImage.AverageBrightnessLevel();
 
-      if (Brightness > 150)
+      if (Brightness > 180)
       {
         ShutterTime = (int)((float)ShutterTime / 1.3);
         MC_LOG("Average brightness: %d - Decrease shutter time to %d", Brightness, (int)ShutterTime);
