@@ -95,7 +95,7 @@ int main(int argc, char * argv[])
   tm SunriseTime;
   tm SunsetTime;
   int NightMode = -1;
-  MANum<int> ShutterTime(50, 50, 4500000);
+  MANum<int> ShutterTime(50, 50, 6000000);
   MANum<int> Iso(800, 200, 800);
   MEImage MaskImage;
   MEImage InfoLayerImage;
@@ -159,7 +159,7 @@ int main(int argc, char * argv[])
     QString CommandStr;
 
     CommandStr = QString("raspistill -ISO %1 -sa %2 -n -w 640 -h 384 -ss %3 -vf -hf -o /tmp/capture.png").arg((int)Iso).
-                 arg(NightMode == 0 ? 50 : 0).arg((int)ShutterTime);
+                 arg(NightMode == 0 ? 20 : 0).arg((int)ShutterTime);
     QProcess::execute(CommandStr);
     if (!MCFileExists("/tmp/capture.png"))
     {
