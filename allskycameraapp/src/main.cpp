@@ -21,12 +21,14 @@
 
 #include <core/MANum.hpp>
 
+#include <MEHistogram.hpp>
 #include <MEImage.hpp>
 
 #include <MCLog.hpp>
 
 #include <sunrise.h>
 
+#include <QDateTime>
 #include <QProcess>
 #include <QTime>
 
@@ -74,6 +76,22 @@ tm GetTime(time_t time)
 }
 
 
+float GetSunArea(MEImage& image)
+{
+    MEHistogram Histogram;
+    int PixelCount = image.GetImageDataSize();
+    float SunArea = 0;
+
+    Histogram.Calculate(image, MEHistogram::h_Overwrite);
+    for (int i = 240; i < 256; ++i)
+    {
+      SunArea += Histogram.HistogramData[i];
+    }
+    SunArea /= (float)PixelCount;
+    return SunArea;
+}
+
+
 int main(int argc, char * argv[])
 {
   printf("allskycameraapp\n");
@@ -95,11 +113,12 @@ int main(int argc, char * argv[])
   tm SunriseTime;
   tm SunsetTime;
   int NightMode = -1;
-  MANum<int> ShutterTime(50, 50, 6000000);
-  MANum<int> Iso(800, 200, 800);
+  MANum<int> ShutterTime(50, 10, 6000000);
+  MANum<int> Iso(800, 100, 800);
   MEImage MaskImage;
   MEImage InfoLayerImage;
   bool InfoLayer = false;
+  bool LongWait = false;
 
   GetLocation(Longitude, Latitude);
   MC_LOG("Current location - longitude: %1.4f latitude: %1.4f", Longitude, Latitude);
@@ -136,30 +155,40 @@ int main(int argc, char * argv[])
     Sunrise = QTime(SunriseTime.tm_hour, SunriseTime.tm_min);
     SunsetTime = GetTime(SunCalc.get_sunset());
     Sunset = QTime(SunsetTime.tm_hour+GmtCorrection, SunsetTime.tm_min);
-    if ((NightMode == -1 || NightMode == 0) && (CurrentTime > Sunset || CurrentTime < Sunrise))
+    if ((NightMode == -1 || NightMode == 0) && (CurrentTime > Sunset || CurrentTime < Sunrise) &&
+        // No night mode in too sunny summer locations
+        SunsetTime.tm_hour+GmtCorrection <= 23)
     {
       MC_LOG("Change to night mode");
       ShutterTime = 4500000;
       Iso = 800;
       NightMode = 1;
     } else
-    if ((NightMode == -1 || NightMode == 1) && CurrentTime > Sunrise && CurrentTime < Sunset)
+    if ((NightMode == -1 || NightMode == 1) &&
+        ((CurrentTime > Sunrise && CurrentTime < Sunset) || SunsetTime.tm_hour+GmtCorrection > 23))
     {
       MC_LOG("Change to daylight mode");
-      ShutterTime = (NightMode == -1 ? 10000 : 4500000);
-      Iso = 200;
+      ShutterTime = (NightMode == -1 ? 500 : 4500000);
+      Iso = 100;
       NightMode = 0;
     } else
-    if (NightMode == 0 && Iso == 200 && CurrentTime > QTime(Sunset.hour()-1, Sunset.minute()) && CurrentTime < Sunset)
+    if (NightMode == 0 && Iso == 100 && CurrentTime > QTime(Sunset.hour()-1, Sunset.minute()) && CurrentTime < Sunset)
     {
       MC_LOG("Change to daylight mode (high ISO mode)");
       Iso = 800;
+    }
+    if (NightMode == 0)
+    {
+      printf("Wait %d\n", LongWait);
+      sleep(LongWait ? 1200 : 30);
+      LongWait = false;
     }
     // Capture an image
     QString CommandStr;
 
     CommandStr = QString("raspistill -ISO %1 -sa %2 -n -w 640 -h 384 -ss %3 -vf -hf -o /tmp/capture.png").arg((int)Iso).
                  arg(NightMode == 0 ? 20 : 0).arg((int)ShutterTime);
+    printf("Start capture\n");
     QProcess::execute(CommandStr);
     if (!MCFileExists("/tmp/capture.png"))
     {
@@ -173,6 +202,9 @@ int main(int argc, char * argv[])
     QString Text;
 
     CapturedImage.LoadFromFile("/tmp/capture.png");
+    CapturedImage.SaveToFile((QString("/home/pi/pics/allskycam_%1_%2.jpg").arg(QDateTime::currentDateTime().toString("yyyyMMdd")).
+                              arg(QDateTime::currentDateTime().toString("HHmm"))).toStdString());
+
     TempImage = CapturedImage;
     TempImage.Mask(MaskImage);
     TempImage.GammaCorrection(0.3);
@@ -181,22 +213,33 @@ int main(int argc, char * argv[])
     TempImage = *BlueLayer;
     TempImage.ConvertToRGB();
     // Shutter time control
+    int Brightness = 0;
+    float SunArea = 0;
+
     if (NightMode == 0)
     {
-      int Brightness = (int)CapturedImage.AverageBrightnessLevel();
-
-      if (Brightness > 180)
+      SunArea = GetSunArea(CapturedImage);
+      Brightness = (int)CapturedImage.AverageBrightnessLevel();
+      if (Brightness > 180 || SunArea > 0.007)
       {
-        ShutterTime = (int)((float)ShutterTime / 1.3);
-        MC_LOG("Average brightness: %d - Decrease shutter time to %d", Brightness, (int)ShutterTime);
+        LongWait = true;
+        ShutterTime = 10;
+//        if (SunArea >= 0.1)
+//          ShutterTime = (int)((float)ShutterTime / 4);
+//        else
+//          ShutterTime = (int)((float)ShutterTime / 2);
+        MC_LOG("Average brightness: %d - Sun area: %1.4f - Decrease shutter time to %d", Brightness, SunArea, (int)ShutterTime);
       } else
-      if (Brightness < 80)
+      if (Brightness < 100 && SunArea < 0.02)
       {
         ShutterTime = (int)((float)ShutterTime*1.2);
         MC_LOG("Average brightness: %d - Increase shutter time to %d", Brightness, (int)ShutterTime);
       }
+      // Do gamma correction if the shutter speed is very short because of direct sunlight
+      if (Brightness < 100)
+        CapturedImage.GammaCorrection(0.5);
     } else {
-      int Brightness = (int)CapturedImage.AverageBrightnessLevel();
+      Brightness = (int)CapturedImage.AverageBrightnessLevel();
 
 //      MC_LOG("Average brightness: %d", Brightness);
       if (Brightness > 200)
@@ -232,7 +275,7 @@ int main(int argc, char * argv[])
 
     UploadCommandStr = QString("curl -s -S -T /tmp/capture.jpg ftp://webcam.wunderground.com --user %1:%2").arg(argv[1]).arg(argv[2]);
     QProcess::execute(UploadCommandStr);
-    MC_LOG("Image uploaded");
+    MC_LOG("Image uploaded (brightness: %d, sunarea: %1.4f)", Brightness, SunArea);
     // Wait some time
     sleep(40);
   }
