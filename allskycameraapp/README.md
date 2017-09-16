@@ -18,7 +18,7 @@ new environment.
 
 1. Add my Ubuntu PPA for RaspPi to the package sources:
 
-   On Raspbian Jessie:
+   On **Raspbian Jessie**:
    
    sudo nano /etc/apt/sources.list.d/aiboplus-rpi.list
    ```
@@ -26,7 +26,7 @@ new environment.
    deb-src http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu trusty main
    ```
 
-   On Raspbian Stretch:
+   On **Raspbian Stretch**:
    
    sudo nano /etc/apt/sources.list.d/aiboplus-rpi.list
    ```
