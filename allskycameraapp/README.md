@@ -18,10 +18,20 @@ new environment.
 
 1. Add my Ubuntu PPA for RaspPi to the package sources:
 
+   On Raspbian Jessie:
+   
    sudo nano /etc/apt/sources.list.d/aiboplus-rpi.list
    ```
    deb http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu trusty main
    deb-src http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu trusty main
+   ```
+
+   On Raspbian Stretch:
+   
+   sudo nano /etc/apt/sources.list.d/aiboplus-rpi.list
+   ```
+   deb http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu zesty main
+   deb-src http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu zesty main
    ```
 
 2. Update package repos
