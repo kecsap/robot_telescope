@@ -13,7 +13,7 @@ import time
 h,t = dht.read_retry(dht.DHT22, 4)
 # The temperature is inaccurate with my DHT22 chip
 if t > 0:
-    t /= 1.5
+    t /= 1.3
 print 'outTemp={0:0.1f}'.format(t)
 print 'outHumidity={0:0.1f}'.format(h)
 
