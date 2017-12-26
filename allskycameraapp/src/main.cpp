@@ -97,9 +97,9 @@ int main(int argc, char * argv[])
   printf("allskycameraapp\n");
   printf("Developed by Csaba Kertesz (csaba.kertesz@gmail.com)\n\n");
 
-  if (argc != 3)
+  if (argc != 4)
   {
-    printf("Usage: allskycameraapp Wunderground_camera_ID Wunderground_password\n");
+    printf("Usage: allskycameraapp Wunderground_camera_ID Wunderground_password /path/to/save/image/\n");
     return 1;
   }
 
@@ -186,7 +186,7 @@ int main(int argc, char * argv[])
     // Capture an image
     QString CommandStr;
 
-    CommandStr = QString("raspistill -ISO %1 -sa %2 -n -w 640 -h 384 -ss %3 -vf -hf -o /tmp/capture.png").arg((int)Iso).
+    CommandStr = QString("raspistill -awb cloud -ISO %1 -sa %2 -n -w 640 -h 384 -ss %3 -vf -hf -o /tmp/capture.png").arg((int)Iso).
                  arg(NightMode == 0 ? 20 : 0).arg((int)ShutterTime);
     printf("Start capture\n");
     QProcess::execute(CommandStr);
@@ -269,11 +269,11 @@ int main(int argc, char * argv[])
                              0.8, MEColor(255, 255, 255));
     }
     // Save the final image
-    CapturedImage.SaveToFile("/tmp/capture.jpg");
+    CapturedImage.SaveToFile((QString(argv[3])+"/capture.jpg").toStdString());
     // Upload the image to Wunderground
     QString UploadCommandStr;
 
-    UploadCommandStr = QString("curl -s -S -T /tmp/capture.jpg ftp://webcam.wunderground.com --user %1:%2").arg(argv[1]).arg(argv[2]);
+    UploadCommandStr = QString(QString("curl -s -S -T ")+argv[3]+"/capture.jpg ftp://webcam.wunderground.com --user %1:%2").arg(argv[1]).arg(argv[2]);
     QProcess::execute(UploadCommandStr);
     MC_LOG("Image uploaded (brightness: %d, sunarea: %1.4f)", Brightness, SunArea);
     // Wait some time
