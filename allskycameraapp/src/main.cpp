@@ -19,6 +19,8 @@
  *
  */
 
+#include "inference.h"
+
 #include <core/MANum.hpp>
 
 #include <MEHistogram.hpp>
@@ -28,9 +30,14 @@
 
 #include <sunrise.h>
 
+#include <QCommandLineParser>
 #include <QDateTime>
+#include <QDir>
+#include <QFile>
 #include <QProcess>
 #include <QTime>
+
+#include <opencv2/core.hpp>
 
 #include <geoclue.h>
 
@@ -41,7 +48,7 @@
 
 int GetGmtOffset()
 {
-  time_t UtcTime = time(NULL);
+  time_t UtcTime = time(nullptr);
   struct tm LocalTime = { 0 };
   int Offset = 0;
 
@@ -55,11 +62,11 @@ int GetGmtOffset()
 
 void GetLocation(float& longitude, float& latitude)
 {
-  GError* Error = NULL;
-  GClueSimple* GeoClueContext = gclue_simple_new_sync("firefox", GCLUE_ACCURACY_LEVEL_EXACT, NULL, &Error);
+  GError* Error = nullptr;
+  GClueSimple* GeoClueContext = gclue_simple_new_sync("firefox", GCLUE_ACCURACY_LEVEL_EXACT, nullptr, &Error);
   GClueLocation* GeoLocation = gclue_simple_get_location(GeoClueContext);
 
-  if (Error != NULL)
+  if (Error != nullptr)
   {
     MC_WARNING("GeoClue2 error: %s", Error->message);
   }
@@ -92,16 +99,60 @@ float GetSunArea(MEImage& image)
 }
 
 
-int main(int argc, char * argv[])
+bool ValidateImage(MEImage& image, const QString& filename = "")
 {
+  return true;
+
+  if (image.GetLayerCount() != 3 || image.GetWidth() != 160 || image.GetHeight() != 96)
+  {
+    printf("Warning: invalid image properties %dx%dx%d instead of 160x96x3\n", image.GetWidth(),
+           image.GetHeight(), image.GetLayerCount());
+    return false;
+  }
+  // OpenCV stores the channels in reverse order
+  std::unique_ptr<MEImage> LayerR(image.GetLayer(2));
+  std::unique_ptr<MEImage> LayerG(image.GetLayer(1));
+  std::unique_ptr<MEImage> LayerB(image.GetLayer(0));
+
+  if (LayerR->AverageBrightnessLevel() / 12 > LayerG->AverageBrightnessLevel())
+  {
+    printf("Invalid image - %s (%1.2f, %1.2f, %1.2f)\n", qPrintable(filename), LayerR->AverageBrightnessLevel(),
+           LayerG->AverageBrightnessLevel(), LayerB->AverageBrightnessLevel());
+    return false;
+  }
+  return true;
+}
+
+
+int main(int argc, char* argv[])
+{
+  QCoreApplication App(argc, argv);
+  std::unique_ptr<CppInference> SkyModel;
+
   printf("allskycameraapp\n");
   printf("Developed by Csaba Kertesz (csaba.kertesz@gmail.com)\n\n");
 
-  if (argc != 4)
-  {
-    printf("Usage: allskycameraapp Wunderground_camera_ID Wunderground_password /path/to/save/image/\n");
-    return 1;
-  }
+  // Parse command line arguments
+  QCommandLineParser Parser;
+  QCommandLineOption CameraIDOption({"c", "cameraid"}, "Wunderground camera ID", "cameraid");
+  QCommandLineOption PasswordOption({"p", "password"}, "Wunderground password", "password");
+  QCommandLineOption PathOption({"i", "imagepath"}, "Path to save images", "imagepath");
+  QCommandLineOption WebFileOption({"w", "webfile"}, "Static web image", "webfile");
+  QCommandLineOption ModelOption({"m", "modelprefix"}, "Model prefix name (model.{data-00000-of-00001,index,meta})", "modelprefix");
+  QCommandLineOption MaskOption({"M", "maskimage"}, "Mask image", "maskimage", "mask.png");
+  QCommandLineOption TestImageOption({"t", "testimage"}, "Test image or directory", "testimage");
+  QCommandLineOption SortOption({"s", "sort"}, "Sort images in image path");
+
+  Parser.addHelpOption();
+  Parser.addOption(CameraIDOption);
+  Parser.addOption(PasswordOption);
+  Parser.addOption(PathOption);
+  Parser.addOption(WebFileOption);
+  Parser.addOption(ModelOption);
+  Parser.addOption(MaskOption);
+  Parser.addOption(TestImageOption);
+  Parser.addOption(SortOption);
+  Parser.process(App);
 
   MCLog::SetCustomHandler(new MCLogEcho);
   MCLog::SetDebugStatus(true);
@@ -127,14 +178,14 @@ int main(int argc, char * argv[])
   SunsetTime = GetTime(SunCalc.get_sunset());
   MC_LOG("Sunrise: %02d:%02d", SunriseTime.tm_hour, SunriseTime.tm_min);
   MC_LOG("Sunset: %02d:%02d", SunsetTime.tm_hour+GmtCorrection, SunsetTime.tm_min);
-  if (!MCFileExists("mask.png"))
+  if (!MCFileExists(Parser.value(MaskOption).toStdString()))
   {
-    MC_WARNING("Mask image (mask.png) does not exist!");
+    MC_WARNING("Mask image (%s) does not exist!", qPrintable(Parser.value(MaskOption)));
     MaskImage.Realloc(640, 384, 3);
     MaskImage.DrawRectangle(0, 0, 639, 383, MEColor(255, 255, 255), true);
   } else {
     MC_LOG("Loading mask image...");
-    MaskImage.LoadFromFile("mask.png");
+    MaskImage.LoadFromFile(Parser.value(MaskOption).toStdString());
     MaskImage.Invert();
     MaskImage.ConvertToRGB();
   }
@@ -143,6 +194,93 @@ int main(int argc, char * argv[])
     MC_LOG("Loading info layer image...");
     InfoLayerImage.LoadFromFile("info_layer.jpg");
     InfoLayer = true;
+  }
+
+  if (Parser.isSet("modelprefix"))
+  {
+    SkyModel.reset(new CppInference());
+    SkyModel->Load(Parser.value(ModelOption));
+    if (Parser.isSet("testimage") &&
+        (QFile(Parser.value(TestImageOption)).exists() || QDir(Parser.value(TestImageOption)).exists()))
+    {
+      QStringList Files;
+      int FilesCount = 0;
+      bool PathMode = true;
+
+      if (QDir(Parser.value(TestImageOption)).exists())
+      {
+        QStringList Filenames = QDir(Parser.value(TestImageOption)).entryList(QStringList() << "*.png" << "*.jpg" << "*.jpeg",
+                                                                              QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+
+        for (auto filename : Filenames)
+          Files += Parser.value(TestImageOption)+'/'+filename;
+      } else {
+        PathMode = false;
+        Files << Parser.value(TestImageOption);
+      }
+      int Hits = 0;
+
+      for (auto filename : Files)
+      {
+        MEImage TestImage;
+        std::unique_ptr<MEImage> TempImage;
+
+        TestImage.LoadFromFile(filename.toStdString());
+        if (TestImage.GetLayerCount() == 3)
+        {
+          TempImage.reset(new MEImage(TestImage));
+          TempImage->Mask(MaskImage);
+          TempImage->Resize(160, 96, true);
+          if (!ValidateImage(*TempImage, filename))
+          {
+            if (PathMode && Parser.isSet("sort"))
+            {
+              QDir().mkpath(Parser.value(TestImageOption)+"/invalid");
+              QFile(filename).rename(Parser.value(TestImageOption)+"/invalid/"+filename.section('/', -1, -1));
+            }
+            continue;
+          }
+        }
+        if (TestImage.GetLayerCount() == 1)
+        {
+          TestImage.ConvertToRGB();
+        }
+        TestImage.Mask(MaskImage);
+        TempImage.reset(TestImage.GetLayer(2));
+        TempImage->Resize(160, 96, true);
+        int Label = SkyModel->Predict(*TempImage);
+
+        if (Label == 0)
+        {
+          FilesCount++;
+          Hits++;
+          printf("%s -> Clear\n", qPrintable(filename.section('/', -1, -1)));
+          if (PathMode && Parser.isSet("sort"))
+          {
+            QDir().mkpath(Parser.value(TestImageOption)+"/clear");
+            QFile(filename).rename(Parser.value(TestImageOption)+"/clear/"+filename.section('/', -1, -1));
+          }
+        }
+        if (Label == 1)
+        {
+          FilesCount++;
+          printf("%s -> Cloud\n", qPrintable(filename.section('/', -1, -1)));
+          if (PathMode && Parser.isSet("sort"))
+          {
+            QDir().mkpath(Parser.value(TestImageOption)+"/clouds");
+            QFile(filename).rename(Parser.value(TestImageOption)+"/clouds/"+filename.section('/', -1, -1));
+          }
+        }
+      }
+      if (FilesCount > 0)
+      {
+        printf("Results: Clear: %1.3f %% - Clouds: %1.3f %% (%d/%d/%d)\n", (float)Hits / FilesCount*100,
+               (float)(FilesCount-Hits) / FilesCount*100, Hits, FilesCount-Hits, FilesCount);
+      } else {
+        printf("No valid images in the requested location: %s\n", qPrintable(Parser.value(TestImageOption)));
+      }
+      return 0;
+    }
   }
 
   while (true)
@@ -197,20 +335,64 @@ int main(int argc, char * argv[])
       continue;
     }
     // Change the shutter speed if needed
-    MEImage CapturedImage, TempImage;
-    ME::ImageSPtr BlueLayer;
-    QString Text;
+    MEImage CapturedImage;
 
     CapturedImage.LoadFromFile("/tmp/capture.png");
-    CapturedImage.SaveToFile((QString("/home/pi/pics/allskycam_%1_%2.jpg").arg(QDateTime::currentDateTime().toString("yyyyMMdd")).
-                              arg(QDateTime::currentDateTime().toString("HHmm"))).toStdString());
+    // Clear sky detection with deep learning
+    int Clouds = -1;
+
+    if (Parser.isSet("imagepath") && QDir(Parser.value(PathOption)).exists() && NightMode == 1)
+    {
+      const QString Path = Parser.value(PathOption)+'/';
+      const QString FileName = QString("allskycam_%1_%2.jpg").arg(QDateTime::currentDateTime().toString("yyyyMMdd")).
+                                arg(QDateTime::currentDateTime().toString("HHmm"));
+
+      if (SkyModel.get())
+      {
+        std::unique_ptr<MEImage> TempImage(new MEImage(CapturedImage));
+
+        TempImage->Mask(MaskImage);
+        TempImage->Resize(160, 96, true);
+        if (ValidateImage(*TempImage))
+        {
+          std::unique_ptr<MEImage> TestImage(CapturedImage.GetLayer(2));
+
+          TestImage->Mask(MaskImage);
+          TestImage->Resize(160, 96, true);
+          int Label = SkyModel->Predict(*TestImage);
+
+          QDir().mkpath(Path+"clear");
+          QDir().mkpath(Path+"clouds");
+          if (Label == 0)
+          {
+            CapturedImage.SaveToFile((Path+"clear/"+FileName).toStdString());
+            Clouds = 0;
+          }
+          if (Label == 1)
+          {
+            CapturedImage.SaveToFile((Path+"clouds/"+FileName).toStdString());
+            Clouds = 1;
+          }
+        } else {
+          QDir().mkpath(Path+"invalid");
+          CapturedImage.SaveToFile((Path+"invalid/"+FileName).toStdString());
+        }
+      } else {
+        CapturedImage.SaveToFile((Path+FileName).toStdString());
+      }
+    }
+
+    // Create an image for upload
+    ME::ImageSPtr RedLayer;
+    MEImage TempImage;
+    QString Text;
 
     TempImage = CapturedImage;
     TempImage.Mask(MaskImage);
     TempImage.GammaCorrection(0.3);
     TempImage.Threshold(140);
-    BlueLayer.reset(TempImage.GetLayer(2));
-    TempImage = *BlueLayer;
+    RedLayer.reset(TempImage.GetLayer(2));
+    TempImage = *RedLayer;
     TempImage.ConvertToRGB();
     // Shutter time control
     int Brightness = 0;
@@ -257,9 +439,9 @@ int main(int argc, char * argv[])
     if (NightMode == 1)
     {
       CapturedImage.GammaCorrection(0.5);
-      if ((float)TempImage.GetWhitePixelCount() / CapturedImage.GetHeight() / CapturedImage.GetWidth() / 3 > 5)
+      if (Clouds == 1 || (Clouds == -1 && (float)TempImage.GetWhitePixelCount() / CapturedImage.GetHeight() / CapturedImage.GetWidth() / 3 > 5))
       {
-        Text = QString("Clouds or Moon");
+        Text = QString("Clouds");
       } else {
         Text = QString("Clear Sky");
         if (InfoLayer)
@@ -269,13 +451,23 @@ int main(int argc, char * argv[])
                              0.8, MEColor(255, 255, 255));
     }
     // Save the final image
-    CapturedImage.SaveToFile((QString(argv[3])+"/capture.jpg").toStdString());
+    if (Parser.isSet("webfile"))
+    {
+      CapturedImage.SaveToFile(Parser.value(WebFileOption).toStdString());
+    }
+    CapturedImage.SaveToFile("/tmp/capture.jpg");
     // Upload the image to Wunderground
-    QString UploadCommandStr;
+    if (Parser.isSet("cameraid") && Parser.isSet("password"))
+    {
+      QString UploadCommandStr;
 
-    UploadCommandStr = QString(QString("curl -s -S -T ")+argv[3]+"/capture.jpg ftp://webcam.wunderground.com --user %1:%2").arg(argv[1]).arg(argv[2]);
-    QProcess::execute(UploadCommandStr);
-    MC_LOG("Image uploaded (brightness: %d, sunarea: %1.4f)", Brightness, SunArea);
+      UploadCommandStr = QString("curl -s -S -T /tmp/capture.jpg ftp://webcam.wunderground.com --user %1:%2").
+                             arg(Parser.value(CameraIDOption), Parser.value(PasswordOption));
+      QProcess::execute(UploadCommandStr);
+      MC_LOG("Image uploaded (brightness: %d, sunarea: %1.4f)", Brightness, SunArea);
+    } else {
+      MC_LOG("Image captured (brightness: %d, sunarea: %1.4f)", Brightness, SunArea);
+    }
     // Wait some time
     sleep(40);
   }
