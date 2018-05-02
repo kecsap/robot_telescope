@@ -28,6 +28,7 @@
 
 #include <MCLog.hpp>
 
+#include <SmtpMime>
 #include <sunrise.h>
 
 #include <QCommandLineParser>
@@ -124,6 +125,43 @@ bool ValidateImage(MEImage& image, const QString& filename = "")
 }
 
 
+void SendEmailNotification(const QString& smtp_user, const QString& smtp_pass, const QString& recipient_email)
+{
+  SmtpClient Smtp("smtp.gmail.com", 465, SmtpClient::SslConnection);
+
+  Smtp.setUser(smtp_user);
+  Smtp.setPassword(smtp_pass);
+
+  MimeMessage Message;
+  MimeText Text;
+
+  // Notification email header
+  Message.setSender(new EmailAddress(smtp_user, "Skycam"));
+  Message.addRecipient(new EmailAddress(recipient_email, ""));
+  Message.setSubject("Clear Sky Alert");
+  // Notification email text
+  Text.setText("Hi,\n\nCheck the sky, it seems to be clear!\n\nRegards,\nSkycam Janitor");
+  Message.addPart(&Text);
+
+  // Send the e-mail
+  if (!Smtp.connectToHost())
+  {
+    printf("Unable to connect to the SMTP server\n");
+  } else {
+    if (!Smtp.login())
+    {
+      printf("Unable to login to the SMTP server\n");
+    } else {
+      if (!Smtp.sendMail(Message))
+      {
+        printf("Unable to send e-mail notification to %s\n", qPrintable(recipient_email));
+      }
+    }
+  }
+  Smtp.quit();
+}
+
+
 int main(int argc, char* argv[])
 {
   QCoreApplication App(argc, argv);
@@ -141,7 +179,10 @@ int main(int argc, char* argv[])
   QCommandLineOption ModelOption({"m", "modelprefix"}, "Model prefix name (model.{data-00000-of-00001,index,meta})", "modelprefix");
   QCommandLineOption MaskOption({"M", "maskimage"}, "Mask image", "maskimage", "mask.png");
   QCommandLineOption TestImageOption({"t", "testimage"}, "Test image or directory", "testimage");
-  QCommandLineOption SortOption({"s", "sort"}, "Sort images in image path");
+  QCommandLineOption SortOption({"s", "sort"}, "Sort images in image path", "sort");
+  QCommandLineOption SmtpUserOption({"U", "smtpuser"}, "GMail SMTP username", "smtpuser");
+  QCommandLineOption SmtpPassOption({"P", "smtppass"}, "GMail SMTP password", "smtppass");
+  QCommandLineOption EmailOption({"e", "email"}, "Notification e-mail address", "email");
 
   Parser.addHelpOption();
   Parser.addOption(CameraIDOption);
@@ -152,7 +193,11 @@ int main(int argc, char* argv[])
   Parser.addOption(MaskOption);
   Parser.addOption(TestImageOption);
   Parser.addOption(SortOption);
+  Parser.addOption(SmtpUserOption);
+  Parser.addOption(SmtpPassOption);
+  Parser.addOption(EmailOption);
   Parser.process(App);
+
 
   MCLog::SetCustomHandler(new MCLogEcho);
   MCLog::SetDebugStatus(true);
@@ -287,6 +332,7 @@ int main(int argc, char* argv[])
   {
     QTime CurrentTime = QTime::currentTime();
     QTime Sunrise, Sunset;
+    static int ClearSkyCount = 0;
 
     // Check the current time and select daytime or night shutter mode based on sunset/sunrise
     SunriseTime = GetTime(SunCalc.get_sunrise());
@@ -301,6 +347,7 @@ int main(int argc, char* argv[])
       ShutterTime = 4500000;
       Iso = 800;
       NightMode = 1;
+      ClearSkyCount = 0;
     } else
     if ((NightMode == -1 || NightMode == 1) &&
         ((CurrentTime > Sunrise && CurrentTime < Sunset) || SunsetTime.tm_hour+GmtCorrection > 23))
@@ -309,6 +356,7 @@ int main(int argc, char* argv[])
       ShutterTime = (NightMode == -1 ? 500 : 4500000);
       Iso = 100;
       NightMode = 0;
+      ClearSkyCount = 0;
     } else
     if (NightMode == 0 && Iso == 100 && CurrentTime > QTime(Sunset.hour()-1, Sunset.minute()) && CurrentTime < Sunset)
     {
@@ -443,6 +491,11 @@ int main(int argc, char* argv[])
       {
         Text = QString("Clouds");
       } else {
+        ClearSkyCount++;
+        if (ClearSkyCount == 20 && Parser.isSet("smtpuser") && Parser.isSet("smtppass") && Parser.isSet("email"))
+        {
+          SendEmailNotification(Parser.value(SmtpUserOption), Parser.value(SmtpPassOption), Parser.value(EmailOption));
+        }
         Text = QString("Clear Sky");
         if (InfoLayer)
           CapturedImage.Addition(InfoLayerImage, ME::NonNegativeSumAddition);
