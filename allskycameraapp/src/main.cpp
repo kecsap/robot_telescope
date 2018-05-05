@@ -492,7 +492,7 @@ int main(int argc, char* argv[])
         Text = QString("Clouds");
       } else {
         ClearSkyCount++;
-        if (ClearSkyCount == 20 && Parser.isSet("smtpuser") && Parser.isSet("smtppass") && Parser.isSet("email"))
+        if (ClearSkyCount == 30 && Parser.isSet("smtpuser") && Parser.isSet("smtppass") && Parser.isSet("email"))
         {
           SendEmailNotification(Parser.value(SmtpUserOption), Parser.value(SmtpPassOption), Parser.value(EmailOption));
         }
