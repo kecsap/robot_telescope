@@ -41,7 +41,7 @@ new environment.
    
 3. Install Qt5, geoclue and other dependencies:
 
-   - sudo apt-get install qt5-default qt5-qmake qtbase5-dev qtbase5-dev-tools
+   - sudo apt-get install qt5-default qt5-qmake qtbase5-dev qtbase5-dev-tools libopencv-core-dev
    - sudo apt-get install libgeoclue-2-dev geoclue-2.0 gir1.2-geoclue-2.0
    - sudo apt-get install libmindcommon-dev libmindaibo-dev libmindeye-dev
 
