@@ -8,8 +8,7 @@ Setup sensor polling:
 
 2. Install the DHT sensor reader script in this directory
 
-   cd sensor_polling
-   sudo ./install_dht22bmp280_reader.sh
+   cd sensor_polling && sudo ./install_dht22bmp280_reader.sh
 
 3. Reboot the Pi or start the polling manually
 
