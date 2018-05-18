@@ -64,7 +64,7 @@ int GetGmtOffset()
 void GetLocation(float& longitude, float& latitude)
 {
   GError* Error = nullptr;
-  GClueSimple* GeoClueContext = gclue_simple_new_sync("firefox", GCLUE_ACCURACY_LEVEL_EXACT, nullptr, &Error);
+  GClueSimple* GeoClueContext = gclue_simple_new_sync("firefox", GCLUE_ACCURACY_LEVEL_CITY, nullptr, &Error);
   GClueLocation* GeoLocation = gclue_simple_get_location(GeoClueContext);
 
   if (Error != nullptr)
