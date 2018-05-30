@@ -11,28 +11,15 @@ new environment.
 * Automatic sunset/sunrise calculation based on GPS coordinates.
 * Automatic shutter time based on the average image brightness.
 * Using mask image to filter out the environment silhouette for clear sky detection.
-* Detecting clear sky based on the dark/light areas of the sky.
+* Detecting clear sky based on the dark/light areas of the sky or deep learning.
 * Upload the captured image to Wunderground service.
 
 ## How to compile on Raspbian
 
-1. Add my Ubuntu PPA for RaspPi to the package sources:
+1. Add toolchain and my Ubuntu PPA for RaspPi to the package sources on Ubuntu Mate:
 
-   On **Raspbian Jessie**:
-
-   sudo nano /etc/apt/sources.list.d/aiboplus-rpi.list
-   ```
-   deb http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu trusty main
-   deb-src http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu trusty main
-   ```
-
-   On **Raspbian Stretch**:
-   
-   sudo nano /etc/apt/sources.list.d/aiboplus-rpi.list
-   ```
-   deb http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu zesty main
-   deb-src http://ppa.launchpad.net/csaba-kertesz/aiboplus-rpi/ubuntu zesty main
-   ```
+   sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+   sudo add-apt-repository ppa:csaba-kertesz/aiboplus-rpi
 
 2. Update package repos
 
@@ -41,20 +28,19 @@ new environment.
    
 3. Install Qt5, geoclue and other dependencies:
 
-   - sudo apt-get install qt5-default qt5-qmake qtbase5-dev qtbase5-dev-tools libopencv-core-dev
-   - sudo apt-get install libgeoclue-2-dev geoclue-2.0 gir1.2-geoclue-2.0
+   - sudo apt-get install qt5-default qt5-qmake qtbase5-dev qtbase5-dev-tools libopencv-core-dev cmake
+   - sudo apt-get install libgeoclue-2-dev geoclue-2.0 gir1.2-geoclue-2.0 libglib2.0-dev
    - sudo apt-get install libmindcommon-dev libmindaibo-dev libmindeye-dev
 
 4. After cloning this repo, compile the application with
 
-   - cd allskycameraapp
-   - qmake
+   - cmake . -DCMAKE_CXX_COMPILER=g++-6
    - make -j3
 
 5. Run the application:
 
    - cd src
-   - ./allskycameraapp Wunderground_camera_ID Wunderground_password
+   - ./allskycameraapp -c Wunderground_camera_ID -p Wunderground_password
 
 Optional 1: Create an RGB image (mask.png) which contains white (255, 255, 255) areas over the environment silhouette.
 Place this file in allskycameraapp/src before running the application. This image is used for the clear sky detection.
