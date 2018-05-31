@@ -14,7 +14,7 @@ new environment.
 * Detecting clear sky based on the dark/light areas of the sky or deep learning.
 * Upload the captured image to Wunderground service.
 
-## How to compile on Raspbian
+## How to compile on Ubuntu Mate for Raspberry Pi
 
 1. Add toolchain and my Ubuntu PPA for RaspPi to the package sources on Ubuntu Mate:
 
