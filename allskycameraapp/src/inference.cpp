@@ -115,7 +115,7 @@ int CppInference::Predict(MEImage& image)
     return -1;
 
   tensorflow::Tensor X(tensorflow::DT_FLOAT, tensorflow::TensorShape({ 1, 96, 160, 1 }));
-  std::vector<std::pair<std::string, tensorflow::Tensor>> Input = { { "input/X", X } };
+  std::vector<std::pair<std::string, tensorflow::Tensor>> Input = { { "conv1_input", X } };
   std::vector<tensorflow::Tensor> Outputs;
   float* XData = X.flat<float>().data();
 
@@ -123,7 +123,7 @@ int CppInference::Predict(MEImage& image)
   {
     XData[i] = (float)reinterpret_cast<unsigned char*>(image.GetIplImage()->imageData)[i];
   }
-  tensorflow::Status Status = Session->Run(Input, { "Accuracy/ArgMax" }, {}, &Outputs);
+  tensorflow::Status Status = Session->Run(Input, { "output/Softmax" }, {}, &Outputs);
 
   if (!Status.ok())
   {
@@ -136,10 +136,13 @@ int CppInference::Predict(MEImage& image)
     return -1;
   }
 
-  auto Item = Outputs[0].shaped<long long, 2>({ 1, 1 }); // { 1, 2 } -> One sample+2 label classes
+  auto Item = Outputs[0].shaped<float, 2>({ 1, 2 }); // { 1, 2 } -> One sample+2 label classes
 
-//  printf("Debug inference output: %d\n", (int)Item(0, 0));
-  return (int)Item(0, 0);
+//  printf("Debug inference output: %d\n", (int)(float)Item(0, 0));
+  if ((float)Item(0, 0) < (float)Item(0, 1))
+    return 1;
+
+  return 0;
 }
 
 
@@ -212,11 +215,11 @@ int CInference::Predict(MEImage& image)
   // Input node
   int64_t InputDim[] = { 1, 96, 160, 1 };
   TF_Tensor* ImageTensor = TF_NewTensor(TF_FLOAT, InputDim, 4, InputData, 96*160*sizeof(float), nullptr, nullptr);
-  TF_Output Input = { TF_GraphOperationByName(Graph, "input/X") };
+  TF_Output Input = { TF_GraphOperationByName(Graph, "conv1_input") };
   TF_Tensor* InputValues[] = { ImageTensor };
 
   // Output node
-  TF_Output Output = { TF_GraphOperationByName(Graph, "Accuracy/ArgMax") };
+  TF_Output Output = { TF_GraphOperationByName(Graph, "output/Softmax") };
   TF_Tensor* OutputValues = nullptr;
 
   // Run prediction
@@ -232,7 +235,7 @@ int CInference::Predict(MEImage& image)
     printf("Tensorflow status %d - %s\n", TF_GetCode(Status), TF_Message(Status));
     return false;
   }
-  int Result = (int)*(long long*)TF_TensorData(OutputValues);
+  int Result = (float)*(float*)TF_TensorData(OutputValues);
 
   // Clean up
   return Result;
