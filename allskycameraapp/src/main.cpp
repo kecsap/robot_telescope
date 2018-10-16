@@ -177,7 +177,6 @@ int main(int argc, char* argv[])
   QCommandLineOption PathOption({"i", "imagepath"}, "Path to save images", "imagepath");
   QCommandLineOption WebFileOption({"w", "webfile"}, "Static web image", "webfile");
   QCommandLineOption ModelOption({"m", "modelprefix"}, "Model prefix name (model.{data-00000-of-00001,index,meta})", "modelprefix");
-  QCommandLineOption MaskOption({"M", "maskimage"}, "Mask image", "maskimage", "mask.png");
   QCommandLineOption TestImageOption({"t", "testimage"}, "Test image or directory", "testimage");
   QCommandLineOption SortOption({"s", "sort"}, "Sort images in image path", "sort");
   QCommandLineOption SmtpUserOption({"U", "smtpuser"}, "GMail SMTP username", "smtpuser");
@@ -190,7 +189,6 @@ int main(int argc, char* argv[])
   Parser.addOption(PathOption);
   Parser.addOption(WebFileOption);
   Parser.addOption(ModelOption);
-  Parser.addOption(MaskOption);
   Parser.addOption(TestImageOption);
   Parser.addOption(SortOption);
   Parser.addOption(SmtpUserOption);
@@ -211,7 +209,6 @@ int main(int argc, char* argv[])
   int NightMode = -1;
   MANum<int> ShutterTime(50, 10, 6000000);
   MANum<int> Iso(800, 100, 800);
-  MEImage MaskImage;
   MEImage InfoLayerImage;
   bool InfoLayer = false;
   bool LongWait = false;
@@ -223,17 +220,6 @@ int main(int argc, char* argv[])
   SunsetTime = GetTime(SunCalc.get_sunset());
   MC_LOG("Sunrise: %02d:%02d", SunriseTime.tm_hour, SunriseTime.tm_min);
   MC_LOG("Sunset: %02d:%02d", SunsetTime.tm_hour+GmtCorrection, SunsetTime.tm_min);
-  if (!MCFileExists(Parser.value(MaskOption).toStdString()))
-  {
-    MC_WARNING("Mask image (%s) does not exist!", qPrintable(Parser.value(MaskOption)));
-    MaskImage.Realloc(640, 384, 3);
-    MaskImage.DrawRectangle(0, 0, 639, 383, MEColor(255, 255, 255), true);
-  } else {
-    MC_LOG("Loading mask image...");
-    MaskImage.LoadFromFile(Parser.value(MaskOption).toStdString());
-    MaskImage.Invert();
-    MaskImage.ConvertToRGB();
-  }
   if (MCFileExists("info_layer.jpg"))
   {
     MC_LOG("Loading info layer image...");
@@ -274,7 +260,6 @@ int main(int argc, char* argv[])
         if (TestImage.GetLayerCount() == 3)
         {
           TempImage.reset(new MEImage(TestImage));
-          TempImage->Mask(MaskImage);
           TempImage->Resize(160, 96, true);
           if (!ValidateImage(*TempImage, filename))
           {
@@ -290,7 +275,6 @@ int main(int argc, char* argv[])
         {
           TestImage.ConvertToRGB();
         }
-        TestImage.Mask(MaskImage);
         TempImage.reset(TestImage.GetLayer(2));
         TempImage->Resize(160, 96, true);
         int Label = SkyModel->Predict(*TempImage);
@@ -399,13 +383,11 @@ int main(int argc, char* argv[])
       {
         std::unique_ptr<MEImage> TempImage(new MEImage(CapturedImage));
 
-        TempImage->Mask(MaskImage);
         TempImage->Resize(160, 96, true);
         if (ValidateImage(*TempImage))
         {
           std::unique_ptr<MEImage> TestImage(CapturedImage.GetLayer(2));
 
-          TestImage->Mask(MaskImage);
           TestImage->Resize(160, 96, true);
           int Label = SkyModel->Predict(*TestImage);
 
@@ -436,7 +418,6 @@ int main(int argc, char* argv[])
     QString Text;
 
     TempImage = CapturedImage;
-    TempImage.Mask(MaskImage);
     TempImage.GammaCorrection(0.3);
     TempImage.Threshold(140);
     RedLayer.reset(TempImage.GetLayer(2));
