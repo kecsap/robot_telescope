@@ -43,8 +43,15 @@ bool CppInference::Load(const QString& model_str)
            Status.ToString().c_str());
     return false;
   }
+  // Ignore info logs
+  char EnvStr[] = "TF_CPP_MIN_LOG_LEVEL=1";
 
-  Session = tensorflow::NewSession(tensorflow::SessionOptions());
+  putenv(EnvStr);
+  // Dynamic GPU memory allocation
+  tensorflow::SessionOptions SessionOptions;
+
+  SessionOptions.config.mutable_gpu_options()->set_allow_growth(true);
+  Session = tensorflow::NewSession(SessionOptions);
   if (Session == nullptr)
   {
     printf("Could not create Tensorflow session.\n");
@@ -138,7 +145,7 @@ int CppInference::Predict(MEImage& image)
 
   auto Item = Outputs[0].shaped<float, 2>({ 1, 2 }); // { 1, 2 } -> One sample+2 label classes
 
-//  printf("Debug inference output: %d\n", (int)(float)Item(0, 0));
+  // printf("Debug inference output: %1.4f %1.4f\n", (float)Item(0, 0), (float)Item(0, 1));
   if ((float)Item(0, 0) < (float)Item(0, 1))
     return 1;
 
